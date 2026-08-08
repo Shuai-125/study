@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>公务员备考工作台</title>
+
+<!-- Tailwind CSS（CDN） -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Chart.js（CDN） -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- Tailwind 深色模式配置 + 自定义调色板 -->
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+            400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+            800: '#3730a3', 900: '#312e81'
+          }
+        },
+        fontFamily: {
+          sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+        }
+      }
+    }
+  };
+</script>
+
+<style>
+  /* ===== 基础样式与过渡 ===== */
+  html { scroll-behavior: smooth; }
+  body { transition: background-color .3s ease, color .3s ease; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,120,140,.4); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* 页面切换动画 */
+  .page-enter { animation: fadeUp .35s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* 侧边栏导航激活态 */
+  .nav-item.active { background: linear-gradient(90deg,#6366f1,#4f46e5); color:#fff; box-shadow:0 6px 16px -6px rgba(79,70,229,.7); }
+
+  /* 可拖拽项 */
+  .drag-item { cursor: grab; transition: opacity .2s, transform .2s; }
+  .drag-item.dragging { opacity: .4; transform: scale(.98); }
+  .drag-over { border-top: 2px solid #6366f1; }
+
+  /* 富文本编辑器 */
+  .editor-area:empty:before { content: attr(data-placeholder); color: #9ca3af; }
+  .editor-area { outline: none; min-height: 260px; }
+  .editor-area h1 { font-size:1.5rem; font-weight:700; }
+  .editor-area h2 { font-size:1.25rem; font-weight:700; }
+
+  /* Toast */
+  #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-120%); z-index: 9999; transition: transform .35s ease; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* 移动端遮罩 */
+  #mask { transition: opacity .3s; }
+
+  /* 表格 */
+  table.data-table { border-collapse: separate; border-spacing: 0; width:100%; }
+  table.data-table th, table.data-table td { padding: .6rem .75rem; text-align: left; font-size: .875rem; }
+  table.data-table thead th { position: sticky; top:0; }
+</style>
+</head>
+
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-gray-100 font-sans antialiased">
+
+<!-- ============ 侧边栏 ============ -->
+<aside id="sidebar"
+  class="fixed lg:translate-x-0 -translate-x-full z-40 top-0 left-0 h-screen w-60 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-transform duration-300">
+  <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+    <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold">备</div>
+    <div class="leading-tight">
+      <div class="font-bold text-sm">备考工作台</div>
+      <div class="text-[11px] text-gray-400">Civil Service Study</div>
+    </div>
+  </div>
+  <nav id="nav" class="flex-1 overflow-y-auto py-3 px-2 space-y-1 text-sm"></nav>
+  <div class="p-3 text-[11px] text-gray-400 border-t border-gray-200 dark:border-gray-800 shrink-0">
+    数据本地存储 · 刷新不丢失
+  </div>
+</aside>
+
+<!-- 移动端遮罩 -->
+<div id="mask" class="fixed inset-0 bg-black/40 z-30 opacity-0 pointer-events-none lg:hidden"></div>
+
+<!-- ============ 主区域 ============ -->
+<div class="lg:ml-60 min-h-screen flex flex-col">
+  <!-- 顶部导航 -->
+  <header class="h-16 sticky top-0 z-20 flex items-center justify-between px-4 lg:px-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">
+    <div class="flex items-center gap-3">
+      <button id="menuBtn" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h1 id="pageTitle" class="font-semibold text-base lg:text-lg">仪表盘</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="themeBtn" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" title="切换深色模式">
+        <svg id="iconSun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.36 6.36l-.7-.7M6.34 6.34l-.7-.7m12.72 0l-.7.7M6.34 17.66l-.7.7M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg id="iconMoon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 内容容器 -->
+  <main id="app" class="flex-1 p-4 lg:p-6"></main>
+</div>
+
+<!-- Toast 提示 -->
+<div id="toast" class="px-4 py-2 rounded-lg shadow-lg text-sm text-white bg-gray-800"></div>
+
+<script>
+/* =====================================================================
+ * 公务员备考工作台 —— 单文件原生实现
+ * 技术：HTML + Tailwind CSS + 原生 JS + Chart.js
+ * 存储：localStorage 全部数据本地持久化
+ * ===================================================================== */
+
+/* ====================== 一、通用工具层 ====================== */
+
+// localStorage 读写封装（带默认值与异常保护）
+const Store = {
+  get(key, def = null) {
+    try {
+      const v = localStorage.getItem(key);
+      return v ? JSON.parse(v) : def;
+    } catch (e) { return def; }
+  },
+  set(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  },
+  del(key) { localStorage.removeItem(key); }
+};
+
+// 各模块存储键名集中管理
+const KEYS = {
+  dashboard: 'cs_dashboard',
+  todos: 'cs_todos',
+  plan: 'cs_plan',
+  xingce: 'cs_xingce',
+  shenlun: 'cs_shenlun',
+  errors: 'cs_errors',
+  mock: 'cs_mock',
+  affairs: 'cs_affairs',
+  settings: 'cs_settings'
+};
+
+// 简易 DOM 操作
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const el = (tag, cls = '', html = '') => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
+};
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const fmtDate = (d) => { const x = new Date(d); return isNaN(x) ? '' : x.toISOString().slice(0, 10); };
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Toast 轻提示
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// 复制文本到剪贴板
+function copyText(text) {
+  navigator.clipboard?.writeText(text).then(() => toast('已复制到剪贴板'))
+    .catch(() => {
+      const ta = el('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('已复制到剪贴板'); } catch (e) { toast('复制失败'); }
+      ta.remove();
+    });
+}
+
+// 下载文本文件
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = el('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ====================== 二、主题（深色模式） ====================== */
+
+const Theme = {
+  init() {
+    const s = Store.get(KEYS.settings, { dark: false });
+    this.apply(s.dark);
+  },
+  apply(dark) {
+    document.documentElement.classList.toggle('dark', dark);
+    $('#iconSun').classList.toggle('hidden', !dark);
+    $('#iconMoon').classList.toggle('hidden', dark);
+    const s = Store.get(KEYS.settings, { dark: false });
+    s.dark = dark; Store.set(KEYS.settings, s);
+  },
+  toggle() {
+    const dark = !document.documentElement.classList.contains('dark');
+    this.apply(dark);
+    // 主题切换后重绘当前页面（图表需更新配色）
+    Router.render();
+  }
+};
+
+/* ====================== 三、路由 ====================== */
+
+const NAV = [
+  { id: 'dashboard', name: '仪表盘',     icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { id: 'plan',      name: '学习计划',   icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+  { id: 'xingce',    name: '行测追踪',   icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  { id: 'shenlun',   name: '申论工作台', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+  { id: 'errors',    name: '错题管理',   icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+  { id: 'mock',      name: '模考分析',   icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z' },
+  { id: 'affairs',   name: '时政知识库', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z' },
+  { id: 'settings',  name: '系统设置',   icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z' }
+];
+
+const Router = {
+  current: 'dashboard',
+  init() {
+    // 渲染侧边导航
+    const nav = $('#nav');
+    NAV.forEach(n => {
+      const a = el('button', 'nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition');
+      a.innerHTML = `<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${n.icon}"/></svg><span>${n.name}</span>`;
+      a.onclick = () => this.go(n.id);
+      a.dataset.id = n.id;
+      nav.appendChild(a);
+    });
+
+    // 移动端菜单
+    $('#menuBtn').onclick = () => {
+      $('#sidebar').classList.toggle('-translate-x-full');
+      const mask = $('#mask');
+      mask.classList.toggle('opacity-0'); mask.classList.toggle('pointer-events-none');
+    };
+    $('#mask').onclick = () => $('#menuBtn').click();
+    $('#themeBtn').onclick = () => Theme.toggle();
+
+    // 默认进入仪表盘
+    this.go('dashboard');
+  },
+  go(id) {
+    this.current = id;
+    $$('#nav .nav-item').forEach(a => a.classList.toggle('active', a.dataset.id === id));
+    $('#pageTitle').textContent = NAV.find(n => n.id === id).name;
+    // 移动端点击后收起侧边栏
+    if (window.innerWidth < 1024) {
+      $('#sidebar').classList.add('-translate-x-full');
+      $('#mask').classList.add('opacity-0'); $('#mask').classList.add('pointer-events-none');
+    }
+    this.render();
+  },
+  render() {
+    const app = $('#app');
+    app.innerHTML = '';
+    const page = el('div', 'page-enter');
+    app.appendChild(page);
+    // 销毁旧图表实例
+    Charts.destroyAll();
+    // 分发到各模块渲染
+    const fn = Pages[this.current];
+    if (fn) fn(page);
+  }
+};
+
+/* ====================== 四、Chart.js 封装 ====================== */
+
+const Charts = {
+  instances: {},
+  // 根据主题返回配色
+  colors() {
+    const dark = document.documentElement.classList.contains('dark');
+    return {
+      text: dark ? '#cbd5e1' : '#475569',
+      grid: dark ? 'rgba(148,163,184,.15)' : 'rgba(100,116,139,.12)',
+      palette: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6']
+    };
+  },
+  setDefaults() {
+    const c = this.colors();
+    Chart.defaults.color = c.text;
+    Chart.defaults.borderColor = c.grid;
+    Chart.defaults.font.family = 'system-ui, sans-serif';
+  },
+  make(id, type, data, options = {}) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return null;
+    const c = this.colors();
+    const baseOptions = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, padding: 14 } },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {}
+    };
+    // 笛卡尔坐标系图表加轴样式
+    if (['bar', 'line'].includes(type)) {
+      baseOptions.scales = {
+        x: { ticks: { color: c.text }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text }, grid: { color: c.grid }, beginAtZero: true }
+      };
+    }
+    const inst = new Chart(ctx, { type, data, options: deepMerge(baseOptions, options) });
+    this.instances[id] = inst;
+    return inst;
+  },
+  destroyAll() {
+    Object.values(this.instances).forEach(i => i?.destroy());
+    this.instances = {};
+  }
+};
+// 简易深合并
+function deepMerge(a, b) {
+  const out = Array.isArray(a) ? [...a] : { ...a };
+  for (const k in b) {
+    if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) out[k] = deepMerge(a[k] || {}, b[k]);
+    else out[k] = b[k];
+  }
+  return out;
+}
+
+/* ====================== 五、通用 UI 组件 ====================== */
+const UI = {
+  // 卡片容器
+  card(extra = '') { return el('div', `bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 ${extra}`); },
+  // 区块标题
+  sectionTitle(text) { return el('h3', 'text-base font-semibold mb-4 flex items-center gap-2', `<span class="w-1.5 h-4 bg-brand-500 rounded"></span>${text}`); },
+  // 输入框
+  input(extra = '') { return el('input', `w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-brand-500 outline-none ${extra}`); },
+  // 按钮
+  btn(text, variant = 'primary', extra = '') {
+    const v = {
+      primary: 'bg-brand-600 hover:bg-brand-700 text-white',
+      ghost: 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200',
+      danger: 'bg-red-500 hover:bg-red-600 text-white',
+      success: 'bg-emerald-500 hover:bg-emerald-600 text-white'
+    }[variant];
+    const b = el('button', `${v} px-3.5 py-2 rounded-lg text-sm font-medium transition ${extra}`, text);
+    return b;
+  },
+  // 标签
+  badge(text, color = 'gray') {
+    const map = { gray:'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300', red:'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300', green:'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', amber:'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300', brand:'bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300' };
+    return el('span', `text-[11px] px-2 py-0.5 rounded-full ${map[color]}`, text);
+  },
+  label(text) { return el('label', 'block text-xs text-gray-500 dark:text-gray-400 mb-1', text); }
+};
+
+/* ===================================================================== */
+/* ============================ 各页面模块 ============================== */
+/* ===================================================================== */
+
+const Pages = {};
+
+/* ---------- 1. 仪表盘 ---------- */
+Pages.dashboard = (root) => {
+  Charts.setDefaults();
+  const db = Store.get(KEYS.dashboard, {
+    exams: { guokao: '', shengkao: '', shiyebian: '' },
+    targets: { xingce: 70, shenlun: 70 },
+    studyTime: [3, 2.5, 4, 3.5, 5, 2, 4], // 周一~周日小时数
+    weeklyGoal: 42 // 每周目标小时
+  });
+  // 兼容旧数据：补充可编辑考试名称
+  if (!db.examNames) db.examNames = { guokao: '国考', shengkao: '省考', shiyebian: '事业编' };
+  const todos = Store.get(KEYS.todos, []);
+  // 由每日计划统计最近7天刷题量
+  const plan = Store.get(KEYS.plan, { dailyPlans: [] });
+  const last7 = [...Array(7)].map((_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const barData = last7.map(d => {
+    // 仅统计已完成的每日计划刷题量，未完成的不计入
+    const items = (plan.dailyPlans || []).filter(p => p.date === d && p.done);
+    return items.reduce((s, p) => s + (Number(p.count) || 0), 0);
+  });
+  // 本周（周一至周日）每日实际学习时长：依据已完成的每日计划，按时段折算小时
+  const weekDates = (() => {
+    const now = new Date();
+    const wd = now.getDay() || 7; // 周日=0 转为 7
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - wd + 1);
+    return [...Array(7)].map((_, i) => {
+      const d = new Date(monday); d.setDate(monday.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+  })();
+  const slotHours = { '上午': 3, '下午': 3, '晚上': 2.5 };
+  // 计算学习时段小时数：优先解析"HH:MM-HH:MM"时间段，旧数据"上午/下午/晚上"按固定时长折算
+  const calcSlotHours = (slot) => {
+    if (slot && slot.includes('-')) {
+      const [s, e] = slot.split('-');
+      const [sh, sm] = (s||'').split(':').map(Number);
+      const [eh, em] = (e||'').split(':').map(Number);
+      if (!isNaN(sh) && !isNaN(eh)) {
+        let diff = (eh*60+em) - (sh*60+sm);
+        if (diff < 0) diff += 24*60; // 跨天补正
+        return diff / 60;
+      }
+      return 0;
+    }
+    return slotHours[slot] || 0;
+  };
+  const weekStudyTime = weekDates.map(d => {
+    const items = (plan.dailyPlans || []).filter(p => p.date === d && p.done);
+    return items.reduce((s, p) => s + calcSlotHours(p.slot), 0);
+  });
+  // 各模块正确率（取行测数据）
+  const xc = Store.get(KEYS.xingce, { modules: [] });
+  const lineLabels = ['常识', '言语', '判断', '数量', '资料'];
+  const lineData = lineLabels.map(name => {
+    const m = (xc.modules || []).find(x => x.name === name);
+    return m && m.total ? Math.round(m.correct / m.total * 100) : 0;
+  });
+
+  root.innerHTML = `
+    <!-- 倒计时卡片（名称可编辑，选日期后自动计算天数） -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      ${['guokao','shengkao','shiyebian'].map(k => `
+        <div class="bg-gradient-to-br from-brand-500 to-brand-700 text-white rounded-xl p-5 shadow-sm">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <input type="text" id="name-${k}" value="${escapeHtml(db.examNames[k]||'')}" placeholder="考试名称" class="bg-transparent text-sm font-medium opacity-90 border-0 border-b border-white/30 focus:border-white/70 outline-none w-full pb-0.5 placeholder-white/50"/>
+              <div class="text-3xl font-bold mt-2" id="cd-${k}">--</div>
+              <div class="text-xs opacity-80 mt-1" id="cd-label-${k}">天</div>
+            </div>
+            <input type="date" id="date-${k}" value="${db.exams[k]||''}" class="bg-white/20 text-white text-xs rounded px-2 py-1 border-0 outline-none [color-scheme:light] shrink-0"/>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <!-- 目标分数 + 周进度 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div class="lg:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>目标分数</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">行测目标</label>
+            <input type="number" id="tgt-xingce" value="${db.targets.xingce}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-brand-500 outline-none"/>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">申论目标</label>
+            <input type="number" id="tgt-shenlun" value="${db.targets.shenlun}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-brand-500 outline-none"/>
+          </div>
+        </div>
+      </div>
+      <div class="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>本周学习进度</h3>
+        ${(() => {
+          const total = weekStudyTime.reduce((s,v)=>s+Number(v||0),0);
+          const goal = db.weeklyGoal||42;
+          const pct = Math.min(100, goal>0 ? Math.round(total / goal * 100) : 0);
+          return `
+          <div class="flex items-end justify-between mb-2">
+            <span class="text-3xl font-bold">${pct}%</span>
+            <div class="flex items-center gap-1.5 text-sm text-gray-400">
+              <span>${total.toFixed(1)} /</span>
+              <input type="number" id="weeklyGoal" value="${goal}" min="1" class="w-16 px-1.5 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 outline-none"/>
+              <span>小时</span>
+            </div>
+          </div>
+          <div class="w-full h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-brand-500 to-emerald-500 transition-all duration-700" style="width:${pct}%"></div>
+          </div>
+          <div class="grid grid-cols-7 gap-1 mt-4 text-center text-[11px] text-gray-400">
+            ${['一','二','三','四','五','六','日'].map((d,i)=>`<div>${d}<div class="mt-1 h-12 bg-gray-100 dark:bg-gray-800 rounded flex items-end"><div class="w-full bg-brand-400 rounded-b transition-all duration-500" style="height:${Math.min(100,(weekStudyTime[i]||0)/5*100)}%" title="${weekStudyTime[i]||0}小时"></div></div></div>`).join('')}
+          </div>`;
+        })()}
+      </div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>近7天刷题量</h3>
+        <div class="h-64"><canvas id="chartBar"></canvas></div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>各模块正确率</h3>
+        <div class="h-64"><canvas id="chartLine"></canvas></div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 lg:col-span-2">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>每日学习时长分布</h3>
+        <div class="h-64"><canvas id="chartPie"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 今日待办 -->
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>今日待办</h3>
+        <div class="flex gap-2">
+          <input id="todoInput" placeholder="添加任务..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 outline-none w-40 sm:w-56"/>
+          <input id="todoDate" type="date" class="px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/>
+          <button id="todoAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">添加</button>
+        </div>
+      </div>
+      <div id="todoList" class="space-y-2"></div>
+      <div id="todoRate" class="mt-3 text-sm text-gray-500"></div>
+    </div>
+  `;
+
+  // 倒计时计算：选定日期后自动计算剩余天数
+  const calcCountdown = () => {
+    const cur = Store.get(KEYS.dashboard, db);
+    ['guokao','shengkao','shiyebian'].forEach(k => {
+      const out = $(`#cd-${k}`); const lab = $(`#cd-label-${k}`);
+      const d = cur.exams[k];
+      if (!d) { out.textContent = '未设置'; if (lab) lab.textContent = '请选择日期'; return; }
+      const diff = Math.ceil((new Date(d) - new Date(todayStr())) / 86400000);
+      if (diff > 0) { out.textContent = diff; if (lab) lab.textContent = '天'; }
+      else if (diff === 0) { out.textContent = '今天'; if (lab) lab.textContent = '就是今天'; }
+      else { out.textContent = '已过'; if (lab) lab.textContent = `${-diff}天前`; }
+    });
+  };
+
+  // 考试名称编辑 + 日期绑定
+  ['guokao','shengkao','shiyebian'].forEach(k => {
+    $(`#name-${k}`).onchange = e => { db.examNames[k] = e.target.value.trim() || k; Store.set(KEYS.dashboard, db); };
+    $(`#date-${k}`).onchange = e => {
+      db.exams[k] = e.target.value; Store.set(KEYS.dashboard, db); calcCountdown();
+    };
+  });
+  // 目标分数绑定
+  $('#tgt-xingce').onchange = e => { db.targets.xingce = +e.target.value; Store.set(KEYS.dashboard, db); };
+  $('#tgt-shenlun').onchange = e => { db.targets.shenlun = +e.target.value; Store.set(KEYS.dashboard, db); };
+  // 每周目标小时数绑定
+  $('#weeklyGoal').onchange = e => { db.weeklyGoal = Math.max(1, +e.target.value || 42); Store.set(KEYS.dashboard, db); Router.render(); };
+
+  calcCountdown();
+
+  // 绘制图表
+  const c = Charts.colors();
+  Charts.make('chartBar', 'bar', {
+    labels: last7.map(d => d.slice(5)),
+    datasets: [{ label: '刷题量', data: barData, backgroundColor: c.palette[0], borderRadius: 6, maxBarThickness: 36 }]
+  });
+  Charts.make('chartLine', 'line', {
+    labels: lineLabels,
+    datasets: [{ label: '正确率(%)', data: lineData, borderColor: c.palette[0], backgroundColor: 'rgba(99,102,241,.15)', fill: true, tension: .35, pointRadius: 4 }]
+  }, { scales: { y: { max: 100 } } });
+  const dayLabels = ['周一','周二','周三','周四','周五','周六','周日'];
+  Charts.make('chartPie', 'doughnut', {
+    labels: dayLabels,
+    datasets: [{ data: weekStudyTime, backgroundColor: c.palette, borderWidth: 0 }]
+  });
+
+  // 待办渲染
+  const renderTodos = () => {
+    const list = $('#todoList'); list.innerHTML = '';
+    const today = todayStr();
+    let done = 0, total = 0;
+    const items = Store.get(KEYS.todos, []);
+    if (!items.length) { list.innerHTML = '<div class="text-sm text-gray-400 py-4 text-center">暂无任务，开始添加今日待办吧</div>'; }
+    items.forEach(t => {
+      total++;
+      if (t.done) done++;
+      const overdue = !t.done && t.date && t.date < today;
+      const row = el('div', `flex items-center gap-3 px-3 py-2.5 rounded-lg border ${overdue ? 'border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800' : 'border-gray-200 dark:border-gray-800'}`);
+      row.innerHTML = `
+        <input type="checkbox" ${t.done?'checked':''} class="w-4 h-4 rounded accent-brand-600" data-id="${t.id}"/>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm ${t.done?'line-through text-gray-400':''} ${overdue?'text-red-600 dark:text-red-400 font-medium':''} truncate">${escapeHtml(t.text)}</div>
+          ${t.date?`<div class="text-[11px] text-gray-400">${t.date}${overdue?' · 逾期':''}</div>`:''}
+        </div>
+        <button class="text-gray-400 hover:text-red-500 text-sm" data-del="${t.id}">删除</button>`;
+      list.appendChild(row);
+    });
+    const rate = total ? Math.round(done/total*100) : 0;
+    $('#todoRate').innerHTML = `完成率：<span class="font-semibold text-brand-600">${rate}%</span> （${done}/${total}）`;
+    // 事件
+    $$('#todoList input[type=checkbox]').forEach(cb => cb.onchange = e => {
+      const arr = Store.get(KEYS.todos, []);
+      const item = arr.find(x => x.id === e.target.dataset.id);
+      if (item) { item.done = e.target.checked; Store.set(KEYS.todos, arr); renderTodos(); }
+    });
+    $$('#todoList [data-del]').forEach(b => b.onclick = () => {
+      let arr = Store.get(KEYS.todos, []);
+      arr = arr.filter(x => x.id !== b.dataset.del); Store.set(KEYS.todos, arr); renderTodos();
+    });
+  };
+  const addTodo = () => {
+    const input = $('#todoInput'); const text = input.value.trim();
+    if (!text) return;
+    const date = $('#todoDate').value || todayStr();
+    const arr = Store.get(KEYS.todos, []);
+    arr.push({ id: uid(), text, date, done: false });
+    Store.set(KEYS.todos, arr);
+    input.value = ''; $('#todoDate').value = '';
+    renderTodos();
+  };
+  $('#todoAdd').onclick = addTodo;
+  $('#todoInput').onkeydown = e => { if (e.key === 'Enter') addTodo(); };
+  renderTodos();
+};
+
+/* ---------- 2. 学习计划管理 ---------- */
+Pages.plan = (root) => {
+  const plan = Store.get(KEYS.plan, {
+    stages: { basic:{start:'',end:''}, strengthen:{start:'',end:''}, real:{start:'',end:''}, final:{start:'',end:''} },
+    weeklyTasks: [],
+    dailyPlans: []
+  });
+  const stageNames = { basic:'基础夯实', strengthen:'强化刷题', real:'真题冲刺', final:'考前冲刺' };
+
+  root.innerHTML = `
+    <!-- 四阶段时间设置 -->
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 mb-6">
+      <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>备考阶段时间设置</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        ${Object.keys(stageNames).map(k => `
+          <div class="p-3 rounded-lg border border-gray-200 dark:border-gray-800">
+            <div class="text-sm font-medium mb-2">${stageNames[k]}</div>
+            <div class="space-y-2">
+              <input type="date" data-stage="${k}" data-f="start" value="${plan.stages[k]?.start||''}" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/>
+              <input type="date" data-stage="${k}" data-f="end" value="${plan.stages[k]?.end||''}" class="w-full px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- 周计划拖拽 -->
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>本周计划（可拖拽排序）</h3>
+        <div class="flex gap-2">
+          <input id="wkInput" placeholder="添加本周任务..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 outline-none w-40 sm:w-56"/>
+          <button id="wkAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">添加</button>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 mb-3">长按任务可拖动调整顺序</p>
+      <div id="wkList" class="space-y-2"></div>
+    </div>
+
+    <!-- 每日计划表 -->
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>每日学习计划</h3>
+        <div class="flex gap-2">
+          <button id="dpAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">新增</button>
+          <button id="dpExport" class="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg text-sm">导出文本</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="data-table text-sm">
+          <thead class="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500">
+            <tr>
+              <th class="rounded-l-lg">日期</th><th>时段</th><th>行测任务</th><th>申论任务</th><th>刷题量</th><th>状态</th><th>正确数</th><th>备注</th><th class="rounded-r-lg">操作</th>
+            </tr>
+          </thead>
+          <tbody id="dpBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // 阶段时间保存
+  $$('[data-stage]').forEach(inp => inp.onchange = e => {
+    plan.stages[e.target.dataset.stage][e.target.dataset.f] = e.target.value;
+    Store.set(KEYS.plan, plan);
+  });
+
+  // 周计划渲染 + 拖拽
+  const renderWeek = () => {
+    const list = $('#wkList'); list.innerHTML = '';
+    const tasks = plan.weeklyTasks;
+    if (!tasks.length) { list.innerHTML = '<div class="text-sm text-gray-400 py-4 text-center">暂无本周任务</div>'; return; }
+    tasks.forEach((t, i) => {
+      const row = el('div', 'drag-item flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50');
+      row.draggable = true; row.dataset.idx = i;
+      row.innerHTML = `
+        <span class="text-gray-400 cursor-grab">⠿</span>
+        <input type="checkbox" ${t.done?'checked':''} data-wk="${i}" class="w-4 h-4 accent-brand-600"/>
+        <span class="flex-1 text-sm ${t.done?'line-through text-gray-400':''}">${escapeHtml(t.text)}</span>
+        <button data-wkdel="${i}" class="text-gray-400 hover:text-red-500 text-sm">删除</button>`;
+      list.appendChild(row);
+    });
+    // 拖拽排序
+    let dragIdx = null;
+    $$('.drag-item', list).forEach(item => {
+      item.addEventListener('dragstart', e => { dragIdx = +item.dataset.idx; item.classList.add('dragging'); });
+      item.addEventListener('dragend', () => { item.classList.remove('dragging'); $$('.drag-over', list).forEach(x=>x.classList.remove('drag-over')); });
+      item.addEventListener('dragover', e => { e.preventDefault(); item.classList.add('drag-over'); });
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+      item.addEventListener('drop', e => {
+        e.preventDefault(); const dropIdx = +item.dataset.idx;
+        if (dragIdx === null || dragIdx === dropIdx) return;
+        const [moved] = plan.weeklyTasks.splice(dragIdx, 1);
+        plan.weeklyTasks.splice(dropIdx, 0, moved);
+        Store.set(KEYS.plan, plan); renderWeek();
+      });
+    });
+    $$('[data-wk]', list).forEach(cb => cb.onchange = e => {
+      plan.weeklyTasks[+e.target.dataset.wk].done = e.target.checked; Store.set(KEYS.plan, plan); renderWeek();
+    });
+    $$('[data-wkdel]', list).forEach(b => b.onclick = () => {
+      plan.weeklyTasks.splice(+b.dataset.wkdel, 1); Store.set(KEYS.plan, plan); renderWeek();
+    });
+  };
+  $('#wkAdd').onclick = () => {
+    const v = $('#wkInput').value.trim(); if (!v) return;
+    plan.weeklyTasks.push({ id: uid(), text: v, done: false });
+    Store.set(KEYS.plan, plan); $('#wkInput').value=''; renderWeek();
+  };
+  $('#wkInput').onkeydown = e => { if (e.key==='Enter') $('#wkAdd').click(); };
+  renderWeek();
+
+  // 每日计划表
+  const slots = ['上午','下午','晚上'];
+  const renderDP = () => {
+    const body = $('#dpBody'); body.innerHTML = '';
+    (plan.dailyPlans || []).forEach((p, i) => {
+      const tr = el('tr', 'border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50');
+      tr.innerHTML = `
+        <td>${p.date||''}</td><td>${p.slot ? p.slot.replace('-','~') : '-'}</td>
+        <td class="max-w-[120px] truncate" title="${escapeHtml(p.xingce)}">${escapeHtml(p.xingce)||'-'}</td>
+        <td class="max-w-[120px] truncate" title="${escapeHtml(p.shenlun)}">${escapeHtml(p.shenlun)||'-'}</td>
+        <td>${p.count||0}</td>
+        <td>${p.done?'<span class="text-emerald-500 text-xs">已完成</span>':'<span class="text-gray-400 text-xs">未完成</span>'}</td>
+        <td>${p.correct!==undefined&&p.correct!==''?p.correct:'-'}</td>
+        <td class="max-w-[140px] truncate" title="${escapeHtml(p.note)}">${escapeHtml(p.note)||'-'}</td>
+        <td class="whitespace-nowrap">
+          <button data-edit="${i}" class="text-brand-600 text-xs mr-2">编辑</button>
+          <button data-del="${i}" class="text-red-500 text-xs">删除</button>
+        </td>`;
+      body.appendChild(tr);
+    });
+    $$('[data-edit]', body).forEach(b => b.onclick = () => openDPForm(+b.dataset.edit));
+    $$('[data-del]', body).forEach(b => b.onclick = () => {
+      if (!confirm('删除该条计划？')) return;
+      plan.dailyPlans.splice(+b.dataset.del, 1); Store.set(KEYS.plan, plan); renderDP();
+    });
+  };
+  // 表单弹窗
+  const openDPForm = (editIdx = null) => {
+    const p = editIdx !== null ? plan.dailyPlans[editIdx] : { date: todayStr(), slot: '', xingce:'', shenlun:'', count:0, correct:'', done:false, note:'' };
+    // 解析已有时段为起止时间（兼容旧数据"上午/下午/晚上"格式）
+    let startTime = '', endTime = '';
+    if (p.slot && p.slot.includes('-')) { const [s, e] = p.slot.split('-'); startTime = s||''; endTime = e||''; }
+    const modal = el('div', 'fixed inset-0 z-50 flex items-center justify-center p-4');
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/50"></div>
+      <div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-semibold mb-4">${editIdx!==null?'编辑':'新增'}每日计划</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div><label class="block text-xs text-gray-500 mb-1">日期</label><input id="f-date" type="date" value="${p.date}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">学习时段（起止时间）</label>
+            <div class="flex items-center gap-1.5">
+              <input id="f-start" type="time" value="${startTime}" class="w-full px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm [color-scheme:light] dark:[color-scheme:dark]"/>
+              <span class="text-gray-400 text-xs shrink-0">到</span>
+              <input id="f-end" type="time" value="${endTime}" class="w-full px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm [color-scheme:light] dark:[color-scheme:dark]"/>
+            </div></div>
+          <div><label class="block text-xs text-gray-500 mb-1">行测任务</label>
+            <select id="f-xingce" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <option value="">- 无 -</option>
+              ${['常识','政治','言语','判断','数量','资料分析'].map(n=>`<option ${p.xingce===n?'selected':''}>${n}</option>`).join('')}
+            </select></div>
+          <div><label class="block text-xs text-gray-500 mb-1">申论任务</label>
+            <select id="f-shenlun" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <option value="">- 无 -</option>
+              ${['归纳概括','综合分析','提出对策','应用文','大作文'].map(n=>`<option ${p.shenlun===n?'selected':''}>${n}</option>`).join('')}
+            </select></div>
+          <div><label class="block text-xs text-gray-500 mb-1">刷题数量</label><input id="f-count" type="number" value="${p.count}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">刷题正确数量</label><input id="f-correct" type="number" min="0" value="${p.correct!==undefined?p.correct:''}" placeholder="选填" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div class="col-span-2"><label class="block text-xs text-gray-500 mb-1">备注</label><input id="f-note" value="${escapeHtml(p.note)}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div class="col-span-2"><label class="flex items-center gap-2 text-sm"><input id="f-done" type="checkbox" ${p.done?'checked':''} class="w-4 h-4 accent-brand-600"/> 已完成</label></div>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button id="f-cancel" class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">取消</button>
+          <button id="f-save" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $('#f-cancel').onclick = () => modal.remove();
+    modal.querySelector('.absolute').onclick = () => modal.remove();
+    $('#f-save').onclick = () => {
+      // 起止时间合并为 "HH:MM-HH:MM" 存入 slot 字段
+      const s = $('#f-start').value, e = $('#f-end').value;
+      const slot = (s && e) ? `${s}-${e}` : (s || e || '');
+      const obj = { date:$('#f-date').value, slot, xingce:$('#f-xingce').value, shenlun:$('#f-shenlun').value, count:+$('#f-count').value||0, correct:$('#f-correct').value!==''?(+$('#f-correct').value||0):'', note:$('#f-note').value.trim(), done:$('#f-done').checked };
+      if (editIdx !== null) plan.dailyPlans[editIdx] = obj; else plan.dailyPlans.push(obj);
+      Store.set(KEYS.plan, plan); modal.remove(); renderDP(); toast('已保存');
+    };
+  };
+  $('#dpAdd').onclick = () => openDPForm();
+  $('#dpExport').onclick = () => {
+    const lines = ['日期\t时段\t行测任务\t申论任务\t刷题量\t状态\t正确数\t备注'];
+    plan.dailyPlans.forEach(p => lines.push([p.date,p.slot,p.xingce,p.shenlun,p.count,p.done?'完成':'未完成',p.correct!==undefined?p.correct:'',p.note].join('\t')));
+    download('每日学习计划.txt', lines.join('\n')); toast('已导出');
+  };
+  renderDP();
+};
+
+/* ---------- 3. 行测模块追踪 ---------- */
+Pages.xingce = (root) => {
+  const xc = Store.get(KEYS.xingce, {
+    modules: [ // 五大模块默认项
+      { id:uid(), name:'常识', course:'', progress:0, total:0, correct:0 },
+      { id:uid(), name:'言语', course:'', progress:0, total:0, correct:0 },
+      { id:uid(), name:'判断', course:'', progress:0, total:0, correct:0 },
+      { id:uid(), name:'数量', course:'', progress:0, total:0, correct:0 },
+      { id:uid(), name:'资料', course:'', progress:0, total:0, correct:0 }
+    ],
+    errorTypes: { audit:0, calc:0, method:0, unknown:0 } // 审题/计算/方法/知识点
+  });
+  if (!xc.modules.length) xc.modules = [
+    { id:uid(), name:'常识', course:'', progress:0, total:0, correct:0 },
+    { id:uid(), name:'言语', course:'', progress:0, total:0, correct:0 },
+    { id:uid(), name:'判断', course:'', progress:0, total:0, correct:0 },
+    { id:uid(), name:'数量', course:'', progress:0, total:0, correct:0 },
+    { id:uid(), name:'资料', course:'', progress:0, total:0, correct:0 }
+  ];
+  Store.set(KEYS.xingce, xc);
+
+  // 从每日计划自动统计已完成的行测刷题量和正确数，累加到对应模块
+  // 行测模块名映射：每日计划中"资料分析"对应行测模块"资料"
+  const xcNameMap = { '资料分析': '资料', '常识': '常识', '政治': '政治', '言语': '言语', '判断': '判断', '数量': '数量' };
+  const autoStats = {}; // {模块名: {total, correct}}
+  (Store.get(KEYS.plan, { dailyPlans: [] }).dailyPlans || []).forEach(p => {
+    if (!p.done || !p.xingce) return;
+    const moduleName = xcNameMap[p.xingce] || p.xingce;
+    if (!autoStats[moduleName]) autoStats[moduleName] = { total: 0, correct: 0 };
+    autoStats[moduleName].total += Number(p.count) || 0;
+    if (p.correct !== '' && p.correct !== undefined && p.correct !== null) {
+      autoStats[moduleName].correct += Number(p.correct) || 0;
+    }
+  });
+  // 将自动统计累加到模块（与手动录入值叠加：手动值 + 计划自动值）
+  xc.modules.forEach(m => {
+    const stat = autoStats[m.name];
+    m._autoTotal = stat ? stat.total : 0;
+    m._autoCorrect = stat ? stat.correct : 0;
+  });
+  Store.set(KEYS.xingce, xc);
+
+  root.innerHTML = `
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>行测模块追踪</h3>
+        <button id="xcFormula" class="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg text-sm">公式速查</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="data-table">
+          <thead class="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500">
+            <tr><th class="rounded-l-lg">模块</th><th>网课进度</th><th>刷题总数</th><th>正确数量</th><th>正确率</th><th class="rounded-r-lg">操作</th></tr>
+          </thead>
+          <tbody id="xcBody"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-400 mt-3">提示：正确率低于 60% 将自动标红；已完成每日计划中的行测刷题量会自动累加（蓝色+N），正确率按合计计算</p>
+    </div>
+
+    <!-- 错误类型统计 -->
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+      <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>错误类型统计</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        ${[['audit','审题错误'],['calc','计算错误'],['method','方法错误'],['unknown','知识点不会']].map(([k,n])=>`
+          <div class="p-4 rounded-lg border border-gray-200 dark:border-gray-800 text-center">
+            <div class="text-xs text-gray-500 mb-2">${n}</div>
+            <input type="number" id="et-${k}" value="${xc.errorTypes[k]||0}" class="w-full text-center text-2xl font-bold px-2 py-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/>
+            <div class="text-[11px] text-gray-400 mt-1">次</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- 公式速查弹层 -->
+    <div id="formulaModal" class="fixed inset-0 z-50 hidden p-4">
+      <div class="absolute inset-0 bg-black/50" id="formulaClose"></div>
+      <div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-3xl mx-auto my-8 p-6 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">行测公式速查</h3>
+          <button id="formulaX" class="text-gray-400 hover:text-gray-600 text-xl">×</button>
+        </div>
+        <div class="space-y-5 text-sm"></div>
+      </div>
+    </div>
+  `;
+
+  // 表格渲染
+  const renderTable = () => {
+    const body = $('#xcBody'); body.innerHTML = '';
+    xc.modules.forEach((m, i) => {
+      // 合并手动录入 + 每日计划自动统计
+      const sumTotal = (Number(m.total)||0) + (Number(m._autoTotal)||0);
+      const sumCorrect = (Number(m.correct)||0) + (Number(m._autoCorrect)||0);
+      const rate = sumTotal ? (sumCorrect / sumTotal * 100) : 0;
+      const low = rate > 0 && rate < 60;
+      const tr = el('tr', 'border-t border-gray-100 dark:border-gray-800');
+      tr.innerHTML = `
+        <td><input data-i="${i}" data-f="name" value="${escapeHtml(m.name)}" class="w-20 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-sm"/></td>
+        <td class="w-40">
+          <div class="flex items-center gap-2">
+            <input data-i="${i}" data-f="progress" type="range" min="0" max="100" value="${m.progress}" class="flex-1 accent-brand-600"/>
+            <span class="text-xs w-8 text-right">${m.progress}%</span>
+          </div>
+        </td>
+        <td>
+          <input data-i="${i}" data-f="total" type="number" value="${sumTotal}" class="w-20 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-sm"/>
+          ${m._autoTotal?`<span class="text-[11px] text-brand-500">含计划+${m._autoTotal}</span>`:''}
+        </td>
+        <td>
+          <input data-i="${i}" data-f="correct" type="number" value="${sumCorrect}" class="w-20 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-sm"/>
+          ${m._autoCorrect?`<span class="text-[11px] text-brand-500">含计划+${m._autoCorrect}</span>`:''}
+        </td>
+        <td><span class="${low?'text-red-500 font-bold':'text-emerald-500'} text-sm">${sumTotal?rate.toFixed(1)+'%':'-'}</span></td>
+        <td><button data-del="${i}" class="text-red-500 text-xs">删除</button></td>`;
+      body.appendChild(tr);
+    });
+    $$('[data-f]', body).forEach(inp => inp.onchange = e => {
+      const i = +e.target.dataset.i, f = e.target.dataset.f;
+      let v = e.target.value;
+      if (['progress','total','correct'].includes(f)) v = +v || 0;
+      // total/correct 输入框显示的是合计值，存入时减去自动统计部分，避免重复累加
+      if (f === 'total') v = v - (Number(xc.modules[i]._autoTotal)||0);
+      if (f === 'correct') v = v - (Number(xc.modules[i]._autoCorrect)||0);
+      xc.modules[i][f] = v; Store.set(KEYS.xingce, xc); renderTable();
+    });
+    $$('[data-del]', body).forEach(b => b.onclick = () => {
+      xc.modules.splice(+b.dataset.del, 1); Store.set(KEYS.xingce, xc); renderTable();
+    });
+  };
+  renderTable();
+
+  // 新增模块按钮（动态加入）
+  const addBtn = UI.btn('+ 新增模块', 'ghost', 'mt-3');
+  addBtn.onclick = () => { xc.modules.push({ id:uid(), name:'新模块', progress:0, total:0, correct:0 }); Store.set(KEYS.xingce, xc); renderTable(); };
+  $('#xcBody').parentElement.parentElement.appendChild(addBtn);
+
+  // 错误类型保存
+  $$('[id^="et-"]').forEach(inp => inp.onchange = e => {
+    xc.errorTypes[e.target.id.slice(3)] = +e.target.value || 0; Store.set(KEYS.xingce, xc);
+  });
+
+  // 公式速查
+  const formulas = [
+    { t:'数量关系', items:['等差数列和 = (首项+末项)×项数÷2','行程问题：路程=速度×时间','工程问题：工作总量=效率×时间','利润=售价-成本；利润率=利润÷成本×100%','浓度=溶质÷溶液×100%','容斥原理：A∪B=A+B-A∩B'] },
+    { t:'资料分析', items:['增长率=(现期-基期)÷基期×100%','增长量=现期-基期=基期×增长率','比重=部分÷整体×100%','平均数=总数÷份数','倍数=A÷B','年均增长率≈(末年÷首年)^(1/n)-1'] },
+    { t:'判断推理', items:['翻译推理：A→B 等价于 ¬B→¬A（逆否命题）','直言命题对当关系：上反对可同假不可同真','三段论：中项至少周延一次','图形推理：对称、旋转、平移、数量规律','定义判断抓关键要素：主体、客体、条件、结果'] },
+    { t:'言语理解', items:['主旨概括找主题句（转折后、递进后、总结词后）','意图判断在主旨基础上推断作者目的','细节理解题选项与原文逐一比对','语句排序抓首尾句与关联词'] }
+  ];
+  $('#xcFormula').onclick = () => {
+    const box = $('#formulaModal .space-y-5');
+    box.innerHTML = formulas.map(g => `
+      <div>
+        <div class="font-semibold text-brand-600 mb-2">${g.t}</div>
+        <ul class="space-y-1.5">${g.items.map(x=>`<li class="flex gap-2"><span class="text-brand-400">•</span><span>${x}</span></li>`).join('')}</ul>
+      </div>`).join('');
+    $('#formulaModal').classList.remove('hidden');
+  };
+  $('#formulaX').onclick = () => $('#formulaModal').classList.add('hidden');
+  $('#formulaClose').onclick = () => $('#formulaModal').classList.add('hidden');
+};
+
+/* ---------- 4. 申论工作台 ---------- */
+Pages.shenlun = (root) => {
+  const sl = Store.get(KEYS.shenlun, {
+    words: { // 规范词分类库
+      '乡村振兴': ['产业兴旺、生态宜居、乡风文明、治理有效、生活富裕','巩固拓展脱贫攻坚成果同乡村振兴有效衔接','推进农业农村现代化'],
+      '基层治理': ['共建共治共享的社会治理格局','自治、法治、德治相结合','网格化、精细化、智能化管理'],
+      '营商环境': ['深化"放管服"改革','打造市场化、法治化、国际化营商环境','减税降费、激发市场主体活力'],
+      '生态': ['绿水青山就是金山银山','山水林田湖草沙一体化保护','碳达峰、碳中和'],
+      '文化': ['坚定文化自信','推动中华优秀传统文化创造性转化、创新性发展','培育和践行社会主义核心价值观'],
+      '民生': ['兜牢民生底线','幼有所育、学有所教、劳有所得、病有所医','增进民生福祉']
+    },
+    templates: {
+      golden: ['时代是出卷人，我们是答卷人，人民是阅卷人。','惟改革者进，惟创新者强，惟改革创新者胜。','治国常富，而乱国必贫。'],
+      subpoint: ['一是坚持问题导向，聚焦痛点精准施策；','二是强化系统思维，统筹推进形成合力；','三是健全长效机制，巩固成果防止反弹。'],
+      opening: ['当前，……问题日益凸显，已成为制约高质量发展的瓶颈。对此，亟需多方发力、综合施策。'],
+      ending: ['综上所述，只有以"咬定青山不放松"的韧劲，方能破解……难题，绘就……新画卷。']
+    },
+    drafts: [] // 作文草稿
+  });
+
+  root.innerHTML = `
+    <!-- 标签切换 -->
+    <div class="flex flex-wrap gap-2 mb-5" id="slTabs">
+      ${['words|规范词库','templates|金句模板','editor|作文编辑'].map((s,i)=>`<button data-tab="${s.split('|')[0]}" class="px-3 py-1.5 rounded-lg text-sm ${i===0?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-800'}">${s.split('|')[1]}</button>`).join('')}
+    </div>
+
+    <div id="slContent"></div>
+  `;
+  let curTab = 'words';
+  const renderTab = () => {
+    $$('#slTabs [data-tab]').forEach(b => {
+      const on = b.dataset.tab === curTab;
+      b.className = `px-3 py-1.5 rounded-lg text-sm ${on?'bg-brand-600 text-white':'bg-gray-100 dark:bg-gray-800'}`;
+    });
+    const box = $('#slContent'); box.innerHTML = '';
+    if (curTab === 'words') {
+      const card = UI.card();
+      card.innerHTML = `<div class="flex items-center justify-between mb-4">
+          <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>规范词分类库</h3>
+          <input id="wordSearch" placeholder="搜索规范词..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 w-48 sm:w-64"/>
+        </div><div id="wordBoxes" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>`;
+      box.appendChild(card);
+      const renderWords = (kw='') => {
+        const wb = $('#wordBoxes'); wb.innerHTML = '';
+        Object.entries(sl.words).forEach(([cat, arr]) => {
+          const filtered = arr.filter(w => !kw || w.includes(kw));
+          if (kw && !filtered.length && !cat.includes(kw)) return;
+          const c = UI.card('border border-gray-200 dark:border-gray-800');
+          c.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="font-medium text-sm">${cat}</span><span class="text-xs text-gray-400">${filtered.length}条</span></div>
+            <div class="space-y-2">${filtered.map((w,idx)=>`<div class="flex items-start gap-2 group">
+              <span class="text-sm flex-1">${escapeHtml(w)}</span>
+              <button data-cpy="${cat}|${idx}" class="opacity-0 group-hover:opacity-100 text-brand-600 text-xs">复制</button>
+            </div>`).join('') || '<div class="text-xs text-gray-400">无匹配</div>'}</div>`;
+          wb.appendChild(c);
+        });
+        $$('#wordBoxes [data-cpy]').forEach(b => b.onclick = () => {
+          const [cat, idx] = b.dataset.cpy.split('|'); copyText(sl.words[cat][+idx]);
+        });
+      };
+      $('#wordSearch').oninput = e => renderWords(e.target.value.trim());
+      renderWords();
+    }
+    else if (curTab === 'templates') {
+      const tplMap = { golden:'金句', subpoint:'分论点', opening:'开头模板', ending:'结尾模板' };
+      Object.entries(tplMap).forEach(([k, n]) => {
+        const c = UI.card('mb-4');
+        c.innerHTML = `<h3 class="text-base font-semibold mb-3 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>${n}</h3>
+          <div class="space-y-2">${(sl.templates[k]||[]).map((t,i)=>`<div class="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+            <span class="text-sm flex-1">${escapeHtml(t)}</span>
+            <button data-tpl="${k}|${i}" class="text-brand-600 text-xs">复制</button>
+          </div>`).join('')}</div>`;
+        box.appendChild(c);
+      });
+      $$('#slContent [data-tpl]').forEach(b => b.onclick = () => {
+        const [k, i] = b.dataset.tpl.split('|'); copyText(sl.templates[k][+i]);
+      });
+    }
+    else { // 作文编辑器
+      const c = UI.card();
+      c.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>在线作文编辑器</h3>
+          <div class="flex items-center gap-3">
+            <input id="essayTitle" placeholder="作文标题" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 w-40 sm:w-56"/>
+            <button id="essaySave" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm">保存草稿</button>
+            <button id="essayLoad" class="bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg text-sm">草稿列表</button>
+          </div>
+        </div>
+        <!-- 工具栏 -->
+        <div class="flex flex-wrap gap-1 mb-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          ${[['bold','B'],['italic','I'],['underline','U'],['insertUnorderedList','• 列表'],['insertOrderedList','1. 列表'],['formatBlock-H1','H1'],['formatBlock-H2','H2'],['justifyLeft','左'],['justifyCenter','中'],['justifyRight','右']].map(([cmd,label])=>`<button data-cmd="${cmd}" class="px-2.5 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium">${label}</button>`).join('')}
+        </div>
+        <!-- 编辑区 -->
+        <div id="essayEditor" contenteditable="true" data-placeholder="在此输入作文内容..." class="editor-area w-full min-h-[300px] p-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm leading-relaxed"></div>
+        <div class="flex items-center justify-between mt-3 text-sm">
+          <span id="wordCount" class="text-gray-500">字数：0</span>
+          <span class="text-xs text-gray-400">1000字以上黄色预警</span>
+        </div>
+        <div id="draftList" class="hidden mt-4 space-y-2"></div>
+      `;
+      box.appendChild(c);
+      const editor = $('#essayEditor');
+      // 工具栏命令
+      $$('[data-cmd]', c).forEach(b => b.onclick = () => {
+        const cmd = b.dataset.cmd;
+        if (cmd.startsWith('formatBlock-')) {
+          document.execCommand('formatBlock', false, cmd.split('-')[1]);
+        } else {
+          document.execCommand(cmd, false, null);
+        }
+        editor.focus(); updateCount();
+      });
+      const updateCount = () => {
+        const text = editor.innerText.replace(/\s/g,'');
+        const n = text.length;
+        const wc = $('#wordCount');
+        wc.textContent = `字数：${n}`;
+        wc.className = n > 1000 ? 'text-amber-500 font-semibold' : 'text-gray-500';
+        editor.style.borderColor = n > 1000 ? '#f59e0b' : '';
+      };
+      editor.oninput = updateCount;
+      // 保存草稿
+      $('#essaySave').onclick = () => {
+        const title = $('#essayTitle').value.trim() || '未命名草稿';
+        sl.drafts.unshift({ id:uid(), title, content: editor.innerHTML, time: new Date().toLocaleString(), words: editor.innerText.replace(/\s/g,'').length });
+        Store.set(KEYS.shenlun, sl); toast('草稿已保存');
+      };
+      // 草稿列表
+      $('#essayLoad').onclick = () => {
+        const list = $('#draftList'); list.classList.toggle('hidden'); list.innerHTML = '';
+        if (!sl.drafts.length) { list.innerHTML = '<div class="text-sm text-gray-400 py-2">暂无草稿</div>'; return; }
+        sl.drafts.forEach((d, i) => {
+          const row = el('div', 'flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-gray-800');
+          row.innerHTML = `<div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">${escapeHtml(d.title)}</div><div class="text-[11px] text-gray-400">${d.time} · ${d.words}字</div></div>
+            <button data-load="${i}" class="text-brand-600 text-xs">载入</button>
+            <button data-rm="${i}" class="text-red-500 text-xs">删除</button>`;
+          list.appendChild(row);
+        });
+        $$('[data-load]', list).forEach(b => b.onclick = () => {
+          editor.innerHTML = sl.drafts[+b.dataset.load].content; $('#essayTitle').value = sl.drafts[+b.dataset.load].title; updateCount(); list.classList.add('hidden'); toast('已载入');
+        });
+        $$('[data-rm]', list).forEach(b => b.onclick = () => {
+          sl.drafts.splice(+b.dataset.rm, 1); Store.set(KEYS.shenlun, sl); $('#essayLoad').click();
+        });
+      };
+      updateCount();
+    }
+  };
+  $$('#slTabs [data-tab]').forEach(b => b.onclick = () => { curTab = b.dataset.tab; renderTab(); });
+  renderTab();
+};
+
+/* ---------- 5. 三级错题管理 ---------- */
+Pages.errors = (root) => {
+  const errs = Store.get(KEYS.errors, []);
+  const levelMap = { 1:'一级·完全不会', 2:'二级·粗心错误', 3:'三级·做题速度慢' };
+  // 同步行测追踪模块错误类型统计：根据所有错题的"错误原因"重新计数
+  const syncErrTypes = () => {
+    const reasonMap = { '审题错误':'audit', '计算错误':'calc', '方法错误':'method', '知识点不会':'unknown' };
+    const xcData = Store.get(KEYS.xingce, { modules: [], errorTypes: { audit:0, calc:0, method:0, unknown:0 } });
+    const counts = { audit:0, calc:0, method:0, unknown:0 };
+    errs.forEach(e => { const k = reasonMap[e.reason]; if (k) counts[k]++; });
+    xcData.errorTypes = counts; Store.set(KEYS.xingce, xcData);
+  };
+
+  root.innerHTML = `
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="flex flex-wrap gap-2">
+        <select id="errLevel" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <option value="">全部等级</option>
+          <option value="1">一级·完全不会</option>
+          <option value="2">二级·粗心错误</option>
+          <option value="3">三级·做题速度慢</option>
+        </select>
+        <input id="errSearch" placeholder="搜索题干/来源/题型..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 w-48 sm:w-64"/>
+        <label class="flex items-center gap-1 text-sm px-2"><input id="errReview" type="checkbox" class="accent-brand-600"/> 仅看待复盘</label>
+      </div>
+      <div class="flex gap-2">
+        <button id="errAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">新增错题</button>
+        <button id="errExport" class="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg text-sm">导出</button>
+      </div>
+    </div>
+
+    <!-- 复盘提醒 -->
+    <div id="errRemind" class="mb-4"></div>
+
+    <!-- 错题列表 -->
+    <div id="errList" class="space-y-3"></div>
+  `;
+
+  const needReview = (e) => {
+    if (!e.createdAt) return false;
+    const days = (Date.now() - new Date(e.createdAt)) / 86400000;
+    const reviewed7 = e.reviewed7, reviewed21 = e.reviewed21;
+    return (!reviewed7 && days >= 7) || (!reviewed21 && days >= 21);
+  };
+
+  const render = () => {
+    const level = $('#errLevel').value, kw = $('#errSearch').value.trim(), onlyReview = $('#errReview').checked;
+    let list = [...errs].reverse();
+    if (level) list = list.filter(e => e.level == level);
+    if (kw) list = list.filter(e => (e.question+e.source+e.type).toLowerCase().includes(kw.toLowerCase()));
+    if (onlyReview) list = list.filter(needReview);
+
+    // 复盘提醒
+    const remind = $('#errRemind');
+    const r7 = errs.filter(e => needReview(e) && !e.reviewed7).length;
+    remind.innerHTML = r7 ? `<div class="px-4 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm border border-amber-200 dark:border-amber-800">📅 有 <b>${r7}</b> 道错题到达复盘节点（7天/21天），建议及时回顾</div>` : '';
+
+    const box = $('#errList'); box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<div class="text-sm text-gray-400 py-8 text-center">暂无错题</div>'; return; }
+    list.forEach(e => {
+      const days = e.createdAt ? Math.floor((Date.now() - new Date(e.createdAt))/86400000) : 0;
+      const review = needReview(e);
+      const c = UI.card(review ? 'border-l-4 border-l-amber-400' : '');
+      const levelColor = { 1:'red', 2:'amber', 3:'brand' }[e.level];
+      c.innerHTML = `
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${UI.badge(levelMap[e.level], levelColor).outerHTML}
+            ${e.source?`<span class="text-xs text-gray-400">${escapeHtml(e.source)} ${e.year||''}</span>`:''}
+            ${e.type?UI.badge(e.type,'gray').outerHTML:''}
+            ${review?UI.badge('待复盘','amber').outerHTML:''}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button data-edit="${e.id}" class="text-brand-600 text-xs">编辑</button>
+            <button data-del="${e.id}" class="text-red-500 text-xs">删除</button>
+          </div>
+        </div>
+        <div class="text-sm mb-2 font-medium">${escapeHtml(e.question)}</div>
+        ${e.images && e.images.length ? `<div class="flex flex-wrap gap-2 mb-2">${e.images.map((src,i)=>`<img data-imgview="${e.id}|${i}" src="${src}" class="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-80 transition" title="点击查看大图"/>`).join('')}</div>` : ''}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+          <div>错误答案：<span class="text-red-500">${escapeHtml(e.wrongAns)||'-'}</span></div>
+          <div>正确答案：<span class="text-emerald-500">${escapeHtml(e.correctAns)||'-'}</span></div>
+          <div>错误原因：${escapeHtml(e.reason)||'-'}</div>
+          <div>巩固刷题：${e.reviewCount||0} 题</div>
+          <div>二次正确率：${e.secondRate?e.secondRate+'%':'-'}</div>
+          <div>创建：${e.createdAt?fmtDate(e.createdAt):'-'}（${days}天前）</div>
+        </div>
+        ${e.solution?`<div class="mt-2 p-2 rounded bg-gray-50 dark:bg-gray-800/50 text-xs"><b class="text-gray-600 dark:text-gray-300">解题思路：</b>${escapeHtml(e.solution)}</div>`:''}
+        ${review?`<div class="mt-2 flex gap-2">
+          ${!e.reviewed7 && days>=7?`<button data-r7="${e.id}" class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30">标记7天已复盘</button>`:''}
+          ${!e.reviewed21 && days>=21?`<button data-r21="${e.id}" class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30">标记21天已复盘</button>`:''}
+        </div>`:''}`;
+      box.appendChild(c);
+    });
+    // 事件
+    $$('[data-edit]', box).forEach(b => b.onclick = () => openForm(errs.find(x=>x.id===b.dataset.edit)));
+    $$('[data-del]', box).forEach(b => b.onclick = () => {
+      if (!confirm('删除该错题？')) return;
+      const i = errs.findIndex(x=>x.id===b.dataset.del); errs.splice(i,1); Store.set(KEYS.errors,errs); syncErrTypes(); render();
+    });
+    $$('[data-r7]', box).forEach(b => b.onclick = () => { const e=errs.find(x=>x.id===b.dataset.r7); e.reviewed7=true; Store.set(KEYS.errors,errs); render(); });
+    $$('[data-r21]', box).forEach(b => b.onclick = () => { const e=errs.find(x=>x.id===b.dataset.r21); e.reviewed21=true; Store.set(KEYS.errors,errs); render(); });
+    // 点击缩略图查看大图
+    $$('[data-imgview]', box).forEach(img => img.onclick = () => {
+      const [id, i] = img.dataset.imgview.split('|');
+      const e = errs.find(x => x.id === id);
+      const src = e && e.images ? e.images[+i] : '';
+      if (!src) return;
+      const modal = el('div', 'fixed inset-0 z-[60] flex items-center justify-center p-4');
+      modal.innerHTML = `<div class="absolute inset-0 bg-black/80"></div><img src="${src}" class="relative max-w-full max-h-[90vh] rounded-lg shadow-2xl"/><button class="absolute top-4 right-4 text-white text-3xl">×</button>`;
+      document.body.appendChild(modal);
+      modal.querySelector('button').onclick = () => modal.remove();
+      modal.querySelector('.absolute').onclick = () => modal.remove();
+    });
+  };
+
+  // 表单
+  const openForm = (e = null) => {
+    const isEdit = !!e;
+    const d = e || { level:1, source:'', year:'', type:'', question:'', images:[], wrongAns:'', correctAns:'', reason:'', solution:'', reviewCount:0, secondRate:'' };
+    // 临时图片数组（base64），编辑时载入已有图片，保存时一并写入
+    let currentImages = Array.isArray(d.images) ? [...d.images] : [];
+    const modal = el('div', 'fixed inset-0 z-50 flex items-center justify-center p-4');
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/50"></div>
+      <div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-semibold mb-4">${isEdit?'编辑':'新增'}错题</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div><label class="block text-xs text-gray-500 mb-1">等级</label>
+            <select id="e-level" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <option value="1" ${d.level==1?'selected':''}>一级·完全不会</option>
+              <option value="2" ${d.level==2?'selected':''}>二级·粗心错误</option>
+              <option value="3" ${d.level==3?'selected':''}>三级·做题速度慢</option>
+            </select></div>
+          <div><label class="block text-xs text-gray-500 mb-1">题目来源</label><input id="e-source" value="${escapeHtml(d.source)}" placeholder="如：粉笔" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">年份</label><input id="e-year" value="${escapeHtml(d.year)}" placeholder="2024" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">题型</label><input id="e-type" value="${escapeHtml(d.type)}" placeholder="如：资料分析" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div class="col-span-2"><label class="block text-xs text-gray-500 mb-1">题干</label><textarea id="e-question" rows="3" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">${escapeHtml(d.question)}</textarea></div>
+          <!-- 题干配图：支持多张上传，转 base64 本地存储 -->
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">题干配图</label>
+            <div class="flex items-center gap-2 flex-wrap">
+              <div id="e-imgs" class="flex flex-wrap gap-2"></div>
+              <label class="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                上传图片
+                <input id="e-imginput" type="file" accept="image/*" multiple class="hidden"/>
+              </label>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-1">支持多张题目截图，仅本地存储</p>
+          </div>
+          <div><label class="block text-xs text-gray-500 mb-1">错误答案</label><input id="e-wrong" value="${escapeHtml(d.wrongAns)}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">正确答案</label><input id="e-correct" value="${escapeHtml(d.correctAns)}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div class="col-span-2"><label class="block text-xs text-gray-500 mb-1">错误原因</label>
+            <select id="e-reason" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <option value="">- 请选择 -</option>
+              ${['审题错误','计算错误','方法错误','知识点不会'].map(n=>`<option ${d.reason===n?'selected':''}>${n}</option>`).join('')}
+            </select></div>
+          <div class="col-span-2"><label class="block text-xs text-gray-500 mb-1">解题思路</label><textarea id="e-solution" rows="2" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">${escapeHtml(d.solution)}</textarea></div>
+          <div><label class="block text-xs text-gray-500 mb-1">巩固刷题数量</label><input id="e-rc" type="number" value="${d.reviewCount||0}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">二次正确率(%)</label><input id="e-sr" type="number" value="${d.secondRate||''}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button id="e-cancel" class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">取消</button>
+          <button id="e-save" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $('#e-cancel').onclick = () => modal.remove();
+    modal.querySelector('.absolute').onclick = () => modal.remove();
+
+    // 渲染图片缩略图（带删除按钮）
+    const renderImgs = () => {
+      const box = $('#e-imgs'); box.innerHTML = '';
+      currentImages.forEach((src, i) => {
+        const wrap = el('div', 'relative group');
+        wrap.innerHTML = `
+          <img src="${src}" class="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700"/>
+          <button data-imgdel="${i}" class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs hidden group-hover:flex items-center justify-center">×</button>`;
+        box.appendChild(wrap);
+      });
+      $$('#e-imgs [data-imgdel]').forEach(b => b.onclick = () => { currentImages.splice(+b.dataset.imgdel, 1); renderImgs(); });
+    };
+    renderImgs();
+    // 文件选择 -> 转 base64 压缩后加入临时数组
+    $('#e-imginput').onchange = e => {
+      const files = [...e.target.files];
+      if (!files.length) return;
+      let pending = files.length;
+      files.forEach(f => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // 通过 canvas 压缩，避免 localStorage 超限
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxW = 1000; // 限制最长边
+            let w = img.width, h = img.height;
+            if (w > maxW || h > maxW) {
+              if (w >= h) { h = Math.round(h * maxW / w); w = maxW; }
+              else { w = Math.round(w * maxW / h); h = maxW; }
+            }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            currentImages.push(canvas.toDataURL('image/jpeg', 0.8));
+            if (--pending === 0) renderImgs();
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(f);
+      });
+      e.target.value = '';
+    };
+
+    $('#e-save').onclick = () => {
+      const obj = {
+        id: d.id || uid(), level:+$('#e-level').value, source:$('#e-source').value.trim(), year:$('#e-year').value.trim(),
+        type:$('#e-type').value.trim(), question:$('#e-question').value.trim(), images: currentImages,
+        wrongAns:$('#e-wrong').value.trim(),
+        correctAns:$('#e-correct').value.trim(), reason:$('#e-reason').value.trim(), solution:$('#e-solution').value.trim(),
+        reviewCount:+$('#e-rc').value||0, secondRate:$('#e-sr').value,
+        createdAt: d.createdAt || todayStr(), reviewed7: d.reviewed7||false, reviewed21: d.reviewed21||false
+      };
+      if (isEdit) { const i = errs.findIndex(x=>x.id===d.id); errs[i] = obj; } else errs.push(obj);
+      Store.set(KEYS.errors, errs);
+      syncErrTypes(); // 同步行测追踪错误类型统计
+      modal.remove(); render(); toast('已保存');
+    };
+  };
+  $('#errAdd').onclick = () => openForm();
+  $('#errExport').onclick = () => { download('错题数据.txt', JSON.stringify(errs, null, 2)); toast('已导出'); };
+  $('#errLevel').onchange = render; $('#errSearch').oninput = render; $('#errReview').onchange = render;
+  render();
+};
+
+/* ---------- 6. 模考数据分析 ---------- */
+Pages.mock = (root) => {
+  const mock = Store.get(KEYS.mock, []);
+  Charts.setDefaults();
+
+  root.innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-semibold flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>行测模考记录</h3>
+      <button id="mkAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">新增模考</button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5 mb-6">
+      <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>分数趋势走势</h3>
+      <div class="h-72"><canvas id="chartMock"></canvas></div>
+    </div>
+
+    <div class="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+      <table class="data-table">
+        <thead class="bg-gray-50 dark:bg-gray-800 text-xs text-gray-500">
+          <tr><th class="rounded-l-lg">日期</th><th>名称</th><th>总分</th><th>放弃题数</th><th class="rounded-r-lg">操作</th></tr>
+        </thead>
+        <tbody id="mkBody"></tbody>
+      </table>
+    </div>
+  `;
+
+  const render = () => {
+    const body = $('#mkBody'); body.innerHTML = '';
+    [...mock].reverse().forEach((m, idx) => {
+      const i = mock.length - 1 - idx;
+      const tr = el('tr', 'border-t border-gray-100 dark:border-gray-800');
+      tr.innerHTML = `<td>${m.date||''}</td><td>${escapeHtml(m.name)||'-'}</td>
+        <td class="font-semibold text-brand-600">${m.total||'-'}</td>
+        <td>${m.giveUp||0}</td>
+        <td><button data-edit="${i}" class="text-brand-600 text-xs mr-2">编辑</button><button data-del="${i}" class="text-red-500 text-xs">删除</button></td>`;
+      body.appendChild(tr);
+    });
+    $$('[data-edit]', body).forEach(b => b.onclick = () => openForm(+b.dataset.edit));
+    $$('[data-del]', body).forEach(b => b.onclick = () => { mock.splice(+b.dataset.del,1); Store.set(KEYS.mock,mock); render(); });
+
+    // 趋势图
+    const c = Charts.colors();
+    const sorted = [...mock].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+    Charts.make('chartMock', 'line', {
+      labels: sorted.map(m=>m.date||''),
+      datasets: [{
+        label: '总分', data: sorted.map(m=>m.total||0), borderColor:c.palette[0], backgroundColor:'rgba(99,102,241,.15)', fill:true, tension:.35, pointRadius:5
+      }]
+    });
+  };
+
+  const openForm = (idx = null) => {
+    const isEdit = idx !== null;
+    const d = isEdit ? mock[idx] : { date:todayStr(), name:'', total:0, giveUp:0, modules:{} };
+    const mods = ['常识','政治','言语','判断','数量','资料'];
+    const modal = el('div', 'fixed inset-0 z-50 flex items-center justify-center p-4');
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/50"></div>
+      <div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-semibold mb-4">${isEdit?'编辑':'新增'}行测模考记录</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm mb-4">
+          <div><label class="block text-xs text-gray-500 mb-1">日期</label><input id="m-date" type="date" value="${d.date}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">名称</label><input id="m-name" value="${escapeHtml(d.name)}" placeholder="如：2024国考真题" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">总分</label><input id="m-total" type="number" value="${d.total}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">放弃题目数</label><input id="m-giveup" type="number" value="${d.giveUp}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/></div>
+        </div>
+        <div class="text-sm font-medium mb-2">行测各模块用时与正确率</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${mods.map(m=>`
+            <div class="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+              <span class="text-xs w-12">${m}</span>
+              <input id="m-time-${m}" type="number" value="${(d.modules&&d.modules[m]?.time)||''}" placeholder="用时(分)" class="w-full px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/>
+              <input id="m-rate-${m}" type="number" value="${(d.modules&&d.modules[m]?.rate)||''}" placeholder="正确率%" class="w-full px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"/>
+            </div>`).join('')}
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button id="m-cancel" class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">取消</button>
+          <button id="m-save" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $('#m-cancel').onclick = () => modal.remove();
+    modal.querySelector('.absolute').onclick = () => modal.remove();
+    $('#m-save').onclick = () => {
+      const modules = {};
+      mods.forEach(m => { modules[m] = { time:+($(`#m-time-${m}`).value)||0, rate:+($(`#m-rate-${m}`).value)||0 }; });
+      const obj = { id:d.id||uid(), date:$('#m-date').value, name:$('#m-name').value.trim(), total:+$('#m-total').value||0, giveUp:+$('#m-giveup').value||0, modules };
+      if (isEdit) mock[idx] = obj; else mock.push(obj);
+      Store.set(KEYS.mock, mock); modal.remove(); render(); toast('已保存');
+    };
+  };
+  $('#mkAdd').onclick = () => openForm();
+  render();
+};
+
+/* ---------- 7. 时政知识库 ---------- */
+Pages.affairs = (root) => {
+  let affairs = Store.get(KEYS.affairs, [
+    { id:uid(), month:'2026-07', content:'中共中央召开会议，强调要全面深化改革，推进中国式现代化，坚持高质量发展是首要任务。', favorite:false },
+    { id:uid(), month:'2026-06', content:'国务院常务会议部署进一步稳就业稳经济政策措施，加大对中小微企业支持力度。', favorite:false }
+  ]);
+
+  root.innerHTML = `
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="flex gap-2">
+        <input id="afSearch" placeholder="全文搜索时政内容..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 w-56 sm:w-72"/>
+        <select id="afMonth" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <option value="">全部月份</option>
+        </select>
+        <label class="flex items-center gap-1 text-sm px-2"><input id="afFav" type="checkbox" class="accent-brand-600"/> 仅收藏</label>
+      </div>
+      <button id="afAdd" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-sm">新增时政</button>
+    </div>
+    <div id="afList" class="space-y-3"></div>
+  `;
+
+  const render = () => {
+    const kw = $('#afSearch').value.trim().toLowerCase();
+    const month = $('#afMonth').value;
+    const fav = $('#afFav').checked;
+    // 月份选项
+    const months = [...new Set(affairs.map(a=>a.month))].sort().reverse();
+    const sel = $('#afMonth');
+    const cur = sel.value; sel.innerHTML = '<option value="">全部月份</option>' + months.map(m=>`<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+
+    let list = [...affairs].reverse();
+    if (kw) list = list.filter(a => a.content.toLowerCase().includes(kw));
+    if (month) list = list.filter(a => a.month === month);
+    if (fav) list = list.filter(a => a.favorite);
+
+    const box = $('#afList'); box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<div class="text-sm text-gray-400 py-8 text-center">暂无时政内容</div>'; return; }
+    list.forEach(a => {
+      const c = UI.card();
+      c.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-2">
+              ${UI.badge(a.month,'brand').outerHTML}
+              ${a.favorite?`<span class="text-amber-400 text-sm">★</span>`:''}
+            </div>
+            <p class="text-sm leading-relaxed">${kw ? a.content.replace(new RegExp(kw,'gi'), m=>`<mark class="bg-yellow-200 dark:bg-yellow-700 rounded px-0.5">${m}</mark>`) : escapeHtml(a.content)}</p>
+          </div>
+          <div class="flex flex-col gap-1.5 shrink-0">
+            <button data-fav="${a.id}" class="text-xs ${a.favorite?'text-amber-500':'text-gray-400'}">${a.favorite?'★ 取消收藏':'☆ 收藏'}</button>
+            <button data-cpy="${a.id}" class="text-brand-600 text-xs">复制</button>
+            <button data-edit="${a.id}" class="text-brand-600 text-xs">编辑</button>
+            <button data-del="${a.id}" class="text-red-500 text-xs">删除</button>
+          </div>
+        </div>`;
+      box.appendChild(c);
+    });
+    $$('[data-fav]', box).forEach(b => b.onclick = () => { const a=affairs.find(x=>x.id===b.dataset.fav); a.favorite=!a.favorite; Store.set(KEYS.affairs,affairs); render(); });
+    $$('[data-cpy]', box).forEach(b => b.onclick = () => { const a=affairs.find(x=>x.id===b.dataset.cpy); copyText(a.content); });
+    $$('[data-edit]', box).forEach(b => b.onclick = () => openForm(affairs.find(x=>x.id===b.dataset.edit)));
+    $$('[data-del]', box).forEach(b => b.onclick = () => { if(!confirm('删除该条时政？')) return; affairs=affairs.filter(x=>x.id!==b.dataset.del); Store.set(KEYS.affairs,affairs); render(); });
+  };
+
+  const openForm = (a = null) => {
+    const isEdit = !!a; const d = a || { month: todayStr().slice(0,7), content:'', favorite:false };
+    const modal = el('div', 'fixed inset-0 z-50 flex items-center justify-center p-4');
+    modal.innerHTML = `<div class="absolute inset-0 bg-black/50"></div>
+      <div class="relative bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6">
+        <h3 class="text-lg font-semibold mb-4">${isEdit?'编辑':'新增'}时政</h3>
+        <div class="space-y-3">
+          <div><label class="block text-xs text-gray-500 mb-1">月份</label><input id="a-month" type="month" value="${d.month}" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 [color-scheme:light] dark:[color-scheme:dark]"/></div>
+          <div><label class="block text-xs text-gray-500 mb-1">内容</label><textarea id="a-content" rows="6" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">${escapeHtml(d.content)}</textarea></div>
+          <label class="flex items-center gap-2 text-sm"><input id="a-fav" type="checkbox" ${d.favorite?'checked':''} class="w-4 h-4 accent-brand-600"/> 收藏为重要语句</label>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button id="a-cancel" class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">取消</button>
+          <button id="a-save" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $('#a-cancel').onclick = () => modal.remove();
+    modal.querySelector('.absolute').onclick = () => modal.remove();
+    $('#a-save').onclick = () => {
+      const obj = { id:d.id||uid(), month:$('#a-month').value, content:$('#a-content').value.trim(), favorite:$('#a-fav').checked };
+      if (isEdit) { const i=affairs.findIndex(x=>x.id===d.id); affairs[i]=obj; } else affairs.push(obj);
+      Store.set(KEYS.affairs, affairs); modal.remove(); render(); toast('已保存');
+    };
+  };
+  $('#afAdd').onclick = () => openForm();
+  $('#afSearch').oninput = render; $('#afMonth').onchange = render; $('#afFav').onchange = render;
+  render();
+};
+
+/* ---------- 8. 系统设置 ---------- */
+Pages.settings = (root) => {
+  const s = Store.get(KEYS.settings, { dark:false });
+  const allKeys = Object.values(KEYS);
+
+  root.innerHTML = `
+    <div class="max-w-2xl space-y-5">
+      <!-- 主题 -->
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>外观主题</h3>
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-sm font-medium">深色模式</div>
+            <div class="text-xs text-gray-400">一键切换浅色/深色显示</div>
+          </div>
+          <button id="setTheme" class="relative w-14 h-7 rounded-full transition ${s.dark?'bg-brand-600':'bg-gray-300'}">
+            <span class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${s.dark?'translate-x-7':''}"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 数据备份 -->
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>数据备份与恢复</h3>
+        <div class="space-y-3">
+          <button id="setExport" class="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <div class="text-left"><div class="text-sm font-medium">导出 JSON 备份</div><div class="text-xs text-gray-400">下载全部本地数据为 JSON 文件</div></div>
+            <span class="text-brand-600">↓</span>
+          </button>
+          <label class="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer">
+            <div class="text-left"><div class="text-sm font-medium">导入数据恢复</div><div class="text-xs text-gray-400">从 JSON 文件恢复数据（将覆盖现有数据）</div></div>
+            <span class="text-brand-600">↑</span>
+            <input id="setImport" type="file" accept=".json" class="hidden"/>
+          </label>
+        </div>
+      </div>
+
+      <!-- 清空数据 -->
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2 text-red-500"><span class="w-1.5 h-4 bg-red-500 rounded"></span>危险操作</h3>
+        <div class="flex items-center justify-between">
+          <div><div class="text-sm font-medium">清空全部本地数据</div><div class="text-xs text-gray-400">删除所有备考记录，不可恢复</div></div>
+          <button id="setClear" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm">清空</button>
+        </div>
+      </div>
+
+      <!-- 存储概览 -->
+      <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+        <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><span class="w-1.5 h-4 bg-brand-500 rounded"></span>存储概览</h3>
+        <div id="storeOverview" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+      </div>
+    </div>
+  `;
+
+  // 主题开关
+  $('#setTheme').onclick = () => Theme.toggle();
+
+  // 导出
+  $('#setExport').onclick = () => {
+    const data = {};
+    allKeys.forEach(k => data[k] = Store.get(k));
+    download(`备考数据备份_${todayStr()}.json`, JSON.stringify(data, null, 2));
+    toast('已导出备份');
+  };
+  // 导入
+  $('#setImport').onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!confirm('导入将覆盖现有全部数据，确认继续？')) return;
+        Object.entries(data).forEach(([k, v]) => { if (allKeys.includes(k)) Store.set(k, v); });
+        toast('导入成功，即将刷新页面');
+        setTimeout(() => location.reload(), 1000);
+      } catch (err) { toast('导入失败：文件格式错误'); }
+    };
+    reader.readAsText(file);
+  };
+  // 清空
+  $('#setClear').onclick = () => {
+    if (!confirm('确定要清空全部本地数据吗？此操作不可恢复！')) return;
+    if (!confirm('再次确认：所有备考记录将被永久删除')) return;
+    allKeys.forEach(k => Store.del(k));
+    toast('已清空，即将刷新');
+    setTimeout(() => location.reload(), 1000);
+  };
+  // 存储概览
+  const overview = $('#storeOverview');
+  const names = { dashboard:'仪表盘', todos:'待办', plan:'计划', xingce:'行测', shenlun:'申论', errors:'错题', mock:'模考', affairs:'时政', settings:'设置' };
+  Object.entries(names).forEach(([k,n]) => {
+    const v = Store.get(KEYS[k]);
+    const count = Array.isArray(v) ? v.length : (v && typeof v==='object' ? Object.keys(v).length : 0);
+    const c = UI.card('text-center');
+    c.className = 'p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-center bg-white dark:bg-gray-900';
+    c.innerHTML = `<div class="text-2xl font-bold text-brand-600">${count}</div><div class="text-xs text-gray-400 mt-1">${n}</div>`;
+    overview.appendChild(c);
+  });
+};
+
+/* ====================== 六、启动 ====================== */
+window.addEventListener('DOMContentLoaded', () => {
+  Theme.init();
+  Router.init();
+});
+</script>
+</body>
+</html>
